@@ -1,0 +1,14 @@
+{
+  "name": "Setómetro",
+  "short_name": "Setómetro",
+  "description": "Dónde es más probable encontrar setas según especie, terreno, geología, lluvia y temperatura.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#141a16",
+  "theme_color": "#3e5a3a",
+  "lang": "es",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

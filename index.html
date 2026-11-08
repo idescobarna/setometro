@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Setómetro</title>
+<meta name="theme-color" content="#3e5a3a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+/* Layout: panel de campo a la izquierda (cuaderno), mapa a la derecha; en móvil se apilan. */
+:root{
+  --bg:#f3f2ec; --panel:#fbfaf6; --fg:#1f2a22; --muted:#5f6b60; --line:#d9dccf;
+  --moss:#3e5a3a; --moss-soft:#e3eadb; --cep:#9a5b2b; --warn-bg:#fbeee2; --warn:#8a3b12; --ok:#2f6b3a;
+  --s0:#d8d6c9; --s1:#f2c46d; --s2:#e8913c; --s3:#c9561f; --s4:#7d2a12;
+  --f-display:"Young Serif", Georgia, serif;
+  --f-body:"Work Sans", system-ui, -apple-system, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#141a16; --panel:#1b221d; --fg:#e7eadf; --muted:#9aa597; --line:#2f3a32;
+    --moss:#9cc28f; --moss-soft:#25331f; --cep:#e0a26a; --warn-bg:#3a2216; --warn:#f2b28a; --ok:#9cc28f;
+    --s0:#3b4239; color-scheme:dark; }
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--f-body);display:flex}
+aside{width:400px;flex:none;height:100%;overflow-y:auto;background:var(--panel);border-right:1px solid var(--line);
+  padding:20px 20px 40px;display:flex;flex-direction:column;gap:18px}
+#map{flex:1;height:100%;min-width:0}
+h1{font:400 28px/1.1 var(--f-display);margin:0;color:var(--moss)}
+h1 small{display:block;font:500 12px/1.4 var(--f-body);color:var(--muted);letter-spacing:.02em;margin-top:6px}
+h2{font:600 11px/1 var(--f-body);text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 8px}
+.search{display:flex;gap:6px}
+input[type=text],input[type=date],select{padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit}
+.search input{flex:1;min-width:0}
+button{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:6px;padding:8px 12px;cursor:pointer}
+button:hover{border-color:var(--moss)}
+button.small{padding:3px 9px;font-size:12px}
+button.solid{background:var(--moss);color:var(--panel);border-color:var(--moss)}
+button:focus-visible,input:focus-visible,select:focus-visible,.chip:focus-visible{outline:2px solid var(--cep);outline-offset:2px}
+button.primary{background:var(--moss);color:var(--panel);border-color:var(--moss);width:100%;padding:11px;font-weight:600}
+button.primary:disabled{opacity:.6;cursor:wait}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:500 12.5px var(--f-body);padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:transparent;cursor:pointer;color:var(--fg)}
+.chip.off{opacity:.55}
+.chip[aria-pressed=true]{background:var(--moss);color:var(--panel);border-color:var(--moss);opacity:1}
+.grp{margin-bottom:10px}
+.grp-t{font:italic 400 14px var(--f-display);color:var(--cep);margin-bottom:6px}
+.day{display:flex;align-items:center;gap:10px}
+.day input{flex:1}
+.day output{font:500 12.5px var(--f-mono);min-width:118px;text-align:right}
+#status{font-size:12.5px;color:var(--muted);min-height:1.5em;margin-top:8px}
+#status .ld{display:flex;flex-wrap:wrap;gap:4px 12px;font:12px var(--f-mono)}
+#status .ld span.ok{color:var(--ok)} #status .ld span.err{color:var(--warn)}
+#status p{margin:4px 0 0}
+.card{border-top:1px solid var(--line);padding-top:14px}
+.sp-name{font:400 21px/1.2 var(--f-display);margin:0}
+.sp-latin{font-style:italic;color:var(--muted);margin:2px 0 10px}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12.5px;margin:0 0 10px}
+.facts dt{color:var(--muted)} .facts dd{margin:0;font-family:var(--f-mono);font-size:12px}
+.warn{background:var(--warn-bg);color:var(--warn);border-radius:6px;padding:9px 11px;font-size:12.5px}
+.note{font-size:12.5px;color:var(--muted);margin:0 0 8px}
+.months{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;align-items:end;height:54px;margin:8px 0 2px}
+.months i{display:block;background:var(--line);border-radius:2px 2px 0 0;min-height:2px}
+.months i.in{background:var(--cep)}
+.months-l{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;font:10px var(--f-mono);color:var(--muted);text-align:center}
+ol.rank,ul.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+ol.rank li,ul.list li{display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:8px}
+ol.rank li{cursor:pointer}
+ol.rank li:hover{border-color:var(--cep)}
+ul.list li.hot{border-color:var(--s3);background:var(--warn-bg)}
+.num{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:600 12px var(--f-mono);color:#fff;background:var(--s3)}
+.rk-why{font-size:12px;color:var(--muted);line-height:1.4;min-width:0;overflow-wrap:anywhere}
+.rk-why b{color:var(--fg)}
+.rk-why a{color:var(--moss)}
+.rk-score{font:500 18px var(--f-mono);font-variant-numeric:tabular-nums}
+.legend{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted)}
+.ramp{flex:1;height:8px;border-radius:4px;background:linear-gradient(90deg,var(--s0),var(--s1),var(--s2),var(--s3),var(--s4))}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.foot{font-size:11.5px;color:var(--muted);line-height:1.45}
+.foot a{color:var(--moss)}
+/* popup */
+.leaflet-popup-content-wrapper{background:var(--panel);color:var(--fg);border-radius:10px}
+.leaflet-popup-tip{background:var(--panel)}
+.leaflet-popup-content{margin:14px 16px;font:13px/1.45 var(--f-body);width:290px!important;max-height:min(52vh,560px);overflow-y:auto;overscroll-behavior:contain}
+.pp-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
+.pp-h b{font:400 17px var(--f-display)}
+.pp-score{font:500 22px var(--f-mono)}
+.bar{display:grid;grid-template-columns:84px 1fr 34px;align-items:center;gap:8px;font-size:12px;margin:3px 0}
+.bar i{display:block;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.bar i u{display:block;height:100%;background:var(--moss)}
+.bar span:last-child{font-family:var(--f-mono);text-align:right}
+.pp-data{font:11.5px/1.5 var(--f-mono);color:var(--muted);margin:8px 0}
+.pp-act{display:flex;gap:6px;flex-wrap:wrap}
+.pp-act a,.pp-act button{font-size:12px;padding:5px 9px}
+.pp-act a{color:var(--moss);align-self:center}
+.pp-form{display:grid;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+.pp-form input,.pp-form select{width:100%;font-size:12.5px}
+.marker-n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:600 12px var(--f-mono);color:#fff;background:var(--s4);border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.linklike{border:0;background:none;padding:0;font:inherit;font-size:12px;color:var(--moss);text-align:left;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.photos{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}
+.photos figure{margin:0;min-width:0}
+.photos img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;display:block;background:var(--line)}
+.photos figcaption{font-size:10.5px;color:var(--muted);line-height:1.3;margin-top:3px;overflow-wrap:anywhere}
+.photos figcaption a{color:var(--muted)}
+.photos .bad img{outline:3px solid var(--s3);outline-offset:-3px}
+.photos .bad b{color:var(--warn)}
+.field{background:var(--moss-soft);border-radius:8px;padding:10px 12px;font-size:12.5px}
+.marker-st{font-size:14px;line-height:16px;color:#1a5fb4;text-shadow:0 0 2px #fff,0 0 3px #fff;text-align:center}
+.cell-n{width:36px;text-align:right;font:600 12px/16px var(--f-mono);color:#2a1a0e;text-shadow:0 0 2px #fff,0 0 3px #fff,0 0 4px #fff;pointer-events:none}
+.marker-star{font-size:22px;line-height:22px;text-shadow:0 0 3px #fff,0 0 2px #fff;color:#b8860b}
+@media (max-width:760px){
+  body{flex-direction:column;height:auto}
+  #map{height:58vh;flex:none;width:100%}
+  aside{width:100%;height:auto;border-right:0;order:2}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<aside>
+  <h1>Setómetro<small>Dónde es más probable encontrar setas, según especie, terreno, geología, lluvia, temperatura y citas reales.</small></h1>
+
+  <section>
+    <h2>1 · Zona</h2>
+    <form class="search" id="searchForm">
+      <input type="text" id="q" placeholder="Pueblo, sierra o comarca…" autocomplete="off">
+      <button type="submit">Ir</button>
+      <button type="button" id="geo" title="Mi ubicación" aria-label="Mi ubicación">📍</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>2 · Especie</h2>
+    <div id="species"></div>
+  </section>
+
+  <section>
+    <h2>3 · Día</h2>
+    <div class="day">
+      <input type="range" id="day" min="0" max="13" value="0" step="1" aria-label="Día">
+      <output id="dayOut">Hoy</output>
+    </div>
+  </section>
+
+  <section>
+    <button class="primary" id="analyze">Analizar la zona visible del mapa</button>
+    <div id="status"></div>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <h2 style="margin:0">Modo campo</h2>
+      <button type="button" class="small solid" id="fieldBtn">Activar GPS</button>
+    </div>
+    <div class="field" id="fieldBody">Muestra tu posición en directo y la puntuación del punto exacto donde estás.</div>
+    <div class="row" style="margin-top:8px">
+      <button type="button" class="small" id="prepBtn">Preparar salida sin cobertura</button>
+      <button type="button" class="small" id="loadSnapBtn" hidden>Abrir salida guardada</button>
+    </div>
+    <p class="note" id="prepMsg" style="margin-top:6px">Antes de ir al monte, centra el mapa en tu zona y pulsa "Preparar salida": guarda el análisis y el mapa para usarlos sin cobertura.</p>
+  </section>
+
+  <section class="card" id="spCard"></section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <h2 style="margin:0">¿Es buen año?</h2>
+      <button type="button" class="small" id="yearBtn">Calcular</button>
+    </div>
+    <div class="note" id="yearBody" style="margin:0"></div>
+  </section>
+
+  <section class="card">
+    <h2>Mejores zonas</h2>
+    <ol class="rank" id="rank"><li style="cursor:default"><span></span><span class="rk-why">Analiza una zona para ver el ranking.</span><span></span></li></ol>
+    <div class="legend" style="margin-top:12px"><span>Baja</span><div class="ramp"></div><span>Muy alta</span></div>
+    <p class="note" id="valid" style="margin-top:10px"></p>
+  </section>
+
+  <section class="card" id="detail" hidden>
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <h2 style="margin:0">Detalle de la cuadrícula</h2>
+      <button type="button" class="small" id="detailClose">Quitar</button>
+    </div>
+    <div id="detailBody"></div>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <h2 style="margin:0">Zonas vigiladas</h2>
+      <button type="button" class="small" id="notifBtn">Activar avisos</button>
+    </div>
+    <p class="note">Pulsa una cuadrícula y "Vigilar". Al abrir la app (y cada 3 h si la dejas abierta) se recalculan con la previsión de 7 días y te avisa si alguna pasa de tu umbral.</p>
+    <ul class="list" id="watchList"></ul>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <h2 style="margin:0">Mi cuaderno de hallazgos</h2>
+      <div class="row">
+        <button type="button" class="small" id="expBtn">Exportar</button>
+        <label class="small" style="font-size:12px;cursor:pointer;border:1px solid var(--line);border-radius:6px;padding:3px 9px">Importar<input type="file" id="impFile" accept="application/json" hidden></label>
+      </div>
+    </div>
+    <p class="note">Guarda dónde y cuándo encontraste cada seta. Se guardan las condiciones de ese día; si se repiten, la zona puntúa más y te lo indica.</p>
+    <ul class="list" id="findList"></ul>
+  </section>
+
+  <section class="card">
+    <h2>Lluvia medida (AEMET)</h2>
+    <p class="note">La lluvia del modelo puede fallar en tormentas locales. Con una clave gratuita de AEMET, la app la corrige con lo que midieron las estaciones de la zona.
+      Pídela en <a href="https://opendata.aemet.es/centrodedescargas/altaUsuario" target="_blank" rel="noopener" style="color:var(--moss)">opendata.aemet.es</a> (llega por correo) y pégala aquí. Se guarda solo en este navegador.</p>
+    <form class="row" id="aemetForm">
+      <input type="password" id="aemetKey" placeholder="Clave de AEMET OpenData" autocomplete="off" style="flex:1;min-width:0">
+      <button type="submit" class="small solid">Guardar</button>
+      <button type="button" class="small" id="aemetDel" hidden>Borrar clave</button>
+    </form>
+    <p class="note" id="aemetMsg" style="margin-top:6px"></p>
+  </section>
+
+  <p class="foot">
+    Datos: lluvia, temperatura, humedad del suelo y nieve de <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>;
+    altitud Copernicus DEM; vegetación, pistas y espacios protegidos de <a href="https://www.openstreetmap.org" target="_blank" rel="noopener">OpenStreetMap</a>;
+    geología del <a href="https://info.igme.es/cartografiadigital/geologica/Geode.aspx" target="_blank" rel="noopener">IGME (GEODE 1:50.000)</a>;
+    textura del suelo de <a href="https://soilgrids.org" target="_blank" rel="noopener">SoilGrids</a>;
+    citas de setas de <a href="https://www.gbif.org" target="_blank" rel="noopener">GBIF</a>;
+    clima histórico (ERA5) de Open-Meteo; fotos de <a href="https://commons.wikimedia.org" target="_blank" rel="noopener">Wikimedia Commons</a>;
+    lluvia medida de <a href="https://opendata.aemet.es" target="_blank" rel="noopener">AEMET</a> (si pones tu clave).<br>
+    La puntuación es una estimación relativa, no una garantía. Nunca consumas una seta sin identificación segura por un experto, y respeta la normativa de recolección de cada monte.
+  </p>
+</aside>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="especies.js"></script>
+<script>
+// Si la vista previa bloquea las librerías externas, explicar cómo abrirla bien en vez de fallar en silencio
+if (!window.L || !window.ESPECIES) {
+  document.getElementById("map").innerHTML = '<div style="padding:32px;max-width:440px;line-height:1.55">' +
+    '<h2 style="font:400 22px var(--f-display);color:var(--moss);text-transform:none;letter-spacing:0;margin:0 0 10px">Esta vista previa no puede cargar el mapa</h2>' +
+    '<p>El visor de archivos bloquea el mapa y los datos meteorológicos en directo. Abre <b>index.html</b> en Chrome, Safari o Firefox ' +
+    '(doble clic en el archivo), o usa el navegador integrado de la app.</p></div>';
+  window.SETOMETRO_BLOQUEADO = true;
+}
+</script>
+<script src="app.js"></script>
+</body>
+</html>
